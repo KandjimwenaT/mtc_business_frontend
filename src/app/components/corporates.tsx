@@ -52,6 +52,7 @@ import {
 import type { StaffLayoutOutletContext } from "../layoutOutletContext";
 import { defaultSupervisorBadges } from "../hooks/useSupervisorHybridBadges";
 import { useExecutiveData } from "../hooks/useExecutiveData";
+import { useLiveRefresh } from "../hooks/useLiveRefresh";
 
 const mockCorporates = [
   { 
@@ -297,8 +298,8 @@ export default function Corporates() {
   });
 
   // Fetch accounts & executives for manager
-  const fetchAccounts = useCallback(async () => {
-    setLoadingAccounts(true);
+  const fetchAccounts = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoadingAccounts(true);
     try {
       const [accs, corps, execs, supervisorExecs, mgrs, acctMgrs] = await Promise.all([
         getAccounts(),
@@ -327,9 +328,11 @@ export default function Corporates() {
         });
       }
     } catch (err) {
-      toast.error("Failed to load accounts", { description: err instanceof Error ? err.message : undefined });
+      if (!opts?.silent) {
+        toast.error("Failed to load accounts", { description: err instanceof Error ? err.message : undefined });
+      }
     } finally {
-      setLoadingAccounts(false);
+      if (!opts?.silent) setLoadingAccounts(false);
     }
   }, [showCorporatePanel]);
 
@@ -367,6 +370,10 @@ export default function Corporates() {
   useEffect(() => {
     if (showCorporatePanel) fetchAccounts();
   }, [showCorporatePanel, fetchAccounts]);
+
+  useLiveRefresh(["corporates"], () => {
+    void fetchAccounts({ silent: true });
+  });
 
   const refreshCorporateContactPersons = useCallback(
     async (corporateId: number | null | undefined) => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, useCallback, type ComponentType } from "react";
 import { useNavigate } from "react-router";
 import { getMyProfile, type UserProfile } from "../../api/authApi";
 import { getAllTickets, type TicketRecord } from "../../api/ticketApi";
@@ -19,6 +19,7 @@ import {
   type ExpiringContractRecord,
   type SpendingTrendRecord,
 } from "../../api/adminApi";
+import { useLiveRefresh } from "../../hooks/useLiveRefresh";
 import { normalizeDepartmentSegment } from "../../utils/departmentSegment";
 import {
   Card,
@@ -175,49 +176,56 @@ export default function GmDashboard() {
   const [monthlySpendingTotal, setMonthlySpendingTotal] = useState("0.00");
   const [spendingTrend, setSpendingTrend] = useState<SpendingTrendRecord[]>([]);
 
-  useEffect(() => {
-    const run = async () => {
-      try {
+  const loadDashboard = useCallback(async (opts?: { silent?: boolean }) => {
+    try {
+      if (!opts?.silent) {
         setLoading(true);
         setError("");
-        const profileData = await getMyProfile();
-        setProfile(profileData);
-
-        const [ticketsRes, visitsRes, execRes, corpRes, accRes, mgrRes, expContractsRes, spendingSummaryRes, spendingTrendRes] =
-          await Promise.all([
-            getAllTickets().catch(() => [] as TicketRecord[]),
-            getManagerVisits().catch(() => [] as VisitRecord[]),
-            getExecutives().catch(() => [] as ExecutiveRecord[]),
-            getCorporates().catch(() => [] as CorporateRecord[]),
-            getAccounts().catch(() => [] as AccountRecord[]),
-            getManagers().catch(() => [] as ManagerRecord[]),
-            getExpiringContracts(6).catch(() => [] as ExpiringContractRecord[]),
-            getManagerMonthlySpendingSummary().catch(() => ({
-              total: "0.00",
-              currency: "NAD",
-              byCorporate: {},
-              byAccount: {},
-            })),
-            getManagerMonthlySpendingTrend(6).catch(() => [] as SpendingTrendRecord[]),
-          ]);
-
-        setTickets(ticketsRes);
-        setVisits(visitsRes);
-        setExecutives(execRes);
-        setCorporates(corpRes);
-        setAccounts(accRes);
-        setGmManagers(mgrRes);
-        setExpiringContracts(expContractsRes);
-        setMonthlySpendingTotal(spendingSummaryRes.total || "0.00");
-        setSpendingTrend(spendingTrendRes);
-      } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Failed to load dashboard");
-      } finally {
-        setLoading(false);
       }
-    };
-    void run();
+      const profileData = await getMyProfile();
+      setProfile(profileData);
+
+      const [ticketsRes, visitsRes, execRes, corpRes, accRes, mgrRes, expContractsRes, spendingSummaryRes, spendingTrendRes] =
+        await Promise.all([
+          getAllTickets().catch(() => [] as TicketRecord[]),
+          getManagerVisits().catch(() => [] as VisitRecord[]),
+          getExecutives().catch(() => [] as ExecutiveRecord[]),
+          getCorporates().catch(() => [] as CorporateRecord[]),
+          getAccounts().catch(() => [] as AccountRecord[]),
+          getManagers().catch(() => [] as ManagerRecord[]),
+          getExpiringContracts(6).catch(() => [] as ExpiringContractRecord[]),
+          getManagerMonthlySpendingSummary().catch(() => ({
+            total: "0.00",
+            currency: "NAD",
+            byCorporate: {},
+            byAccount: {},
+          })),
+          getManagerMonthlySpendingTrend(6).catch(() => [] as SpendingTrendRecord[]),
+        ]);
+
+      setTickets(ticketsRes);
+      setVisits(visitsRes);
+      setExecutives(execRes);
+      setCorporates(corpRes);
+      setAccounts(accRes);
+      setGmManagers(mgrRes);
+      setExpiringContracts(expContractsRes);
+      setMonthlySpendingTotal(spendingSummaryRes.total || "0.00");
+      setSpendingTrend(spendingTrendRes);
+    } catch (e: unknown) {
+      if (!opts?.silent) setError(e instanceof Error ? e.message : "Failed to load dashboard");
+    } finally {
+      if (!opts?.silent) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
+
+  useLiveRefresh(["tickets", "visits", "corporates", "dashboard"], () => {
+    void loadDashboard({ silent: true });
+  });
 
   const openStatuses = new Set(["new", "assigned", "in_progress", "escalated"]);
 
