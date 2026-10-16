@@ -27,6 +27,8 @@ import {
   CardHeader,
   CardTitle,
   Badge,
+  Button,
+  Input,
   Table,
   TableBody,
   TableCell,
@@ -60,7 +62,10 @@ import {
   Loader2,
   Crown,
   Briefcase,
+  Search,
 } from "lucide-react";
+
+const EXEC_PAGE_SIZE = 8;
 
 function toISODate(value: string | Date): string {
   const d = new Date(value);
@@ -374,6 +379,32 @@ export default function GmDashboard() {
     });
   }, [teamExecutives, tickets, visits, corporates, accounts, thisMonthKey]);
 
+  const [execSearch, setExecSearch] = useState("");
+  const [execPage, setExecPage] = useState(1);
+
+  const filteredExecutiveRows = useMemo(() => {
+    const q = execSearch.trim().toLowerCase();
+    if (!q) return executiveRows;
+    return executiveRows.filter((row) =>
+      row.name.toLowerCase().includes(q) ||
+      row.perf.label.toLowerCase().includes(q)
+    );
+  }, [executiveRows, execSearch]);
+
+  const execTotalPages = Math.max(1, Math.ceil(filteredExecutiveRows.length / EXEC_PAGE_SIZE));
+  const paginatedExecutiveRows = useMemo(() => {
+    const start = (execPage - 1) * EXEC_PAGE_SIZE;
+    return filteredExecutiveRows.slice(start, start + EXEC_PAGE_SIZE);
+  }, [filteredExecutiveRows, execPage]);
+
+  useEffect(() => {
+    setExecPage(1);
+  }, [execSearch]);
+
+  useEffect(() => {
+    if (execPage > execTotalPages) setExecPage(execTotalPages);
+  }, [execPage, execTotalPages]);
+
   const activityRows = useMemo((): ActivityRow[] => {
     const rows: ActivityRow[] = [];
 
@@ -632,9 +663,20 @@ export default function GmDashboard() {
       </Card>
 
       <Card className="rounded-xl border border-slate-200/90 shadow-sm overflow-hidden">
-        <CardHeader className="flex flex-row items-center gap-2 space-y-0 border-b border-slate-100 bg-white pb-4">
-          <Users className="h-5 w-5 text-mtc-blue shrink-0" />
-          <CardTitle className="text-lg">Executive Performance Overview</CardTitle>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0 border-b border-slate-100 bg-white pb-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-mtc-blue shrink-0" />
+            <CardTitle className="text-lg">Executive Performance Overview</CardTitle>
+          </div>
+          <div className="relative w-full sm:max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+            <Input
+              value={execSearch}
+              onChange={(e) => setExecSearch(e.target.value)}
+              placeholder="Search executives..."
+              className="pl-9"
+            />
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -659,8 +701,14 @@ export default function GmDashboard() {
                       No executives under your managers yet.
                     </td>
                   </TableRow>
+                ) : paginatedExecutiveRows.length === 0 ? (
+                  <TableRow>
+                    <td colSpan={9} className="p-4 text-center text-slate-500 py-10">
+                      No executives match your search.
+                    </td>
+                  </TableRow>
                 ) : (
-                  executiveRows.map((row) => (
+                  paginatedExecutiveRows.map((row) => (
                     <TableRow key={row.executiveId} className="border-slate-100">
                       <TableCell className="font-medium text-slate-900">{row.name}</TableCell>
                       <TableCell className="text-right tabular-nums">{row.corporates}</TableCell>
@@ -694,6 +742,33 @@ export default function GmDashboard() {
               </TableBody>
             </Table>
           </div>
+          {filteredExecutiveRows.length > 0 && (
+            <div className="p-4 border-t border-slate-100 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-xs text-slate-500">
+                Showing {(execPage - 1) * EXEC_PAGE_SIZE + (paginatedExecutiveRows.length > 0 ? 1 : 0)}–
+                {(execPage - 1) * EXEC_PAGE_SIZE + paginatedExecutiveRows.length} of {filteredExecutiveRows.length}
+              </span>
+              <div className="flex items-center gap-2 justify-between sm:justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setExecPage((p) => Math.max(1, p - 1))}
+                  disabled={execPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-xs text-slate-500">Page {execPage} of {execTotalPages}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setExecPage((p) => Math.min(execTotalPages, p + 1))}
+                  disabled={execPage >= execTotalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
